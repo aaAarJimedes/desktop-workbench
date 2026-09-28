@@ -1,0 +1,11 @@
+# Project instructions
+
+When this repository belongs to the registered D:\Agent Workspaces workspace, read its AGENTS.md and .workspace/projects.json first. Workspace rules are maintained there.
+
+- Run powershell -ExecutionPolicy Bypass -File .\build.ps1 -Test before releasing.
+- Preserve .NET Framework compiler compatibility and IWorkbenchTool contract.
+- Keep real credentials and server profiles exclusively in local application data, never in Git or releases.
+- Maintain main, immutable version tags, and one cumulative formal Release page. Preserve prior commits, tags, release notes and actual assets.
+- Keep AssemblyInfo.cs, UI and README versions consistent; package.ps1 reads the binary version.
+- Publish only the explicit package allowlist and verify hashes after downloading uploaded assets.
+- CI uses fixtures. Real network tests require authorization and must not compete for active forwarding ports.

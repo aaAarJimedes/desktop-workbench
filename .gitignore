@@ -1,0 +1,15 @@
+build/
+dist/
+*.user
+*.log
+*.log.*
+*.dat
+.env
+.env.*
+settings.json
+tunnels.json
+credentials*
+*.pem
+*.key
+id_rsa*
+id_ed25519*
