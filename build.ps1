@@ -1,8 +1,10 @@
-param([switch]$Test)
+param([switch]$Test, [switch]$SkipDeploy)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $build = Join-Path $root 'build'
 New-Item -ItemType Directory -Force -Path $build | Out-Null
+$marker = Join-Path $build 'tested-build.json'
+if (Test-Path -LiteralPath $marker) { Remove-Item -LiteralPath $marker }
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $refs = @('/r:System.Windows.Forms.dll','/r:System.Drawing.dll','/r:System.Web.Extensions.dll','/r:System.Security.dll')
 & $compiler /nologo /target:exe /out:"$build\IconBuilder.exe" /r:System.Drawing.dll "$root\IconBuilder.cs"
@@ -27,5 +29,9 @@ if ($Test) {
     if ($LASTEXITCODE -ne 0) { throw 'Residency test compilation failed' }
     & "$build\ResidentTests.exe"
     if ($LASTEXITCODE -ne 0) { throw 'Residency tests failed' }
+    $tested = [ordered]@{}
+    foreach ($name in @('Workbench.exe','Workbench.Contracts.dll')) { $tested[$name] = (Get-FileHash -LiteralPath (Join-Path $build $name)).Hash }
+    [IO.File]::WriteAllText($marker, ($tested | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
+    if (!$SkipDeploy -and (Test-Path -LiteralPath (Join-Path $root 'deploy.local.json'))) { & "$root\deploy.ps1" }
 }
 Write-Output "Built: $build\Workbench.exe"

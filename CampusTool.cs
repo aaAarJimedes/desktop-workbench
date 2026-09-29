@@ -15,7 +15,8 @@ namespace Workbench {
         int busy;
         volatile bool disposed, enabled;
         Panel view;
-        Label status,detail,meta;
+        Label status,detail,meta,passwordState;
+        int savedPasswordState;
         TextBox user,password;
         CheckBox auto,startup;
         Button check,save,forget;
@@ -42,6 +43,9 @@ namespace Workbench {
             password=new TextBox {Width=310,UseSystemPasswordChar=true,Margin=new Padding(0,4,0,10)};
             layout.Controls.Add(Label("校园网账号",10,FontStyle.Regular,26)); layout.Controls.Add(user);
             layout.Controls.Add(Label("密码（留空保留已保存密码）",10,FontStyle.Regular,26)); layout.Controls.Add(password);
+            passwordState=Label("",9,FontStyle.Regular,30);layout.Controls.Add(passwordState);
+            user.TextChanged+=(s,e)=>UpdatePasswordState();password.TextChanged+=(s,e)=>UpdatePasswordState();
+            RefreshPasswordState();
             var row=new FlowLayoutPanel {AutoSize=true,Dock=DockStyle.Top,Margin=new Padding(0)};
             save=Button("保存账户",SaveAccount); forget=Button("删除已存凭据",ForgetAccount); row.Controls.Add(save); row.Controls.Add(forget); layout.Controls.Add(row);
             auto=new CheckBox {Text="启用自动检测与恢复",Checked=enabled,AutoSize=true,Margin=new Padding(0,16,0,8)};
@@ -56,15 +60,23 @@ namespace Workbench {
         static Label Label(string text,float size,FontStyle style,int height) {return new Label {Text=text,Font=new Font("Microsoft YaHei UI",size,style),Height=height,Dock=DockStyle.Top,AutoEllipsis=true,Margin=new Padding(0),TextAlign=ContentAlignment.MiddleLeft};}
         static Button Button(string text,Action click) { var b=new Button {Text=text,AutoSize=true,Height=36,MinimumSize=new Size(140,36),FlatStyle=FlatStyle.Flat,BackColor=Color.White,Margin=new Padding(0,4,10,4)};b.FlatAppearance.BorderColor=Color.FromArgb(213,221,230);b.Click+=(s,e)=>click();return b; }
         void Persist() {try{Storage.Save(settings);}catch{MessageBox.Show("无法保存设置，请检查本地应用数据目录权限。");}}
+        void RefreshPasswordState(){try{savedPasswordState=Storage.Password().Length>0?1:0;}catch{savedPasswordState=2;}UpdatePasswordState();}
+        void UpdatePasswordState(){
+            if(passwordState==null)return;
+            bool pending=password.Text.Length>0;
+            bool changed=user.Text.Trim()!=settings.User;
+            passwordState.Text=pending?"新密码尚未保存，请点击“保存账户”。":changed?"账号已修改，请同时输入新密码后保存。":savedPasswordState==1?"✓ 已保存密码（Windows 加密）；留空即可继续使用。":savedPasswordState==2?"已存密码无法读取，请重新输入并保存。":"尚未保存密码，请输入后点击“保存账户”。";
+            passwordState.ForeColor=!pending&&!changed&&savedPasswordState==1?Color.FromArgb(30,105,104):Color.FromArgb(145,90,30);
+        }
         void SaveAccount() {
             if(String.IsNullOrWhiteSpace(user.Text)){MessageBox.Show("请填写校园网账号。");return;}
             try {
                 if(user.Text.Trim()!=settings.User && password.Text.Length==0){MessageBox.Show("更换账号时请同时输入密码。");return;}
                 if(password.Text.Length>0) Storage.Password(password.Text);
-                settings.User=user.Text.Trim(); Storage.Save(settings); password.Clear(); AddEvent("账户设置已保存（Windows 用户加密）"); Run(false);
+                settings.User=user.Text.Trim(); Storage.Save(settings); password.Clear(); RefreshPasswordState(); AddEvent("账户设置已保存（Windows 用户加密）"); Run(false);
             } catch {MessageBox.Show("保存失败，请检查本地存储权限。");}
         }
-        void ForgetAccount() {try {auto.Checked=false;Storage.Forget();password.Clear();AddEvent("凭据已删除，自动恢复已暂停");}catch{MessageBox.Show("删除失败，请检查本地存储权限。");}}
+        void ForgetAccount() {try {auto.Checked=false;Storage.Forget();password.Clear();RefreshPasswordState();AddEvent("凭据已删除，自动恢复已暂停");}catch{MessageBox.Show("删除失败，请检查本地存储权限。");}}
         string lastEvent="";
         void AddEvent(string message) {if(lastEvent==message)return;lastEvent=message;events.Items.Insert(0,DateTime.Now.ToString("HH:mm:ss")+"   "+message);while(events.Items.Count>80)events.Items.RemoveAt(events.Items.Count-1);}
         public void Start() {timer=new System.Threading.Timer(_=>RuntimeLog.Guard("campus-timer",()=>Run(false)),null,1000,30000);}

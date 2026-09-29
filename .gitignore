@@ -1,5 +1,6 @@
 build/
 dist/
+deploy.local.json
 *.user
 *.log
 *.log.*

@@ -9,3 +9,5 @@ When this repository belongs to the registered D:\Agent Workspaces workspace, re
 - Keep AssemblyInfo.cs, UI and README versions consistent; package.ps1 reads the binary version.
 - Publish only the explicit package allowlist and verify hashes after downloading uploaded assets.
 - CI uses fixtures. Real network tests require authorization and must not compete for active forwarding ports.
+
+- If deploy.local.json exists, build.ps1 -Test synchronizes the tested daily installation and preserves user data. Use -SkipDeploy only for isolated verification; complete normal deployment before delivering an app update.

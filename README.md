@@ -2,7 +2,7 @@
 
 <img src="assets/workbench.png" width="96" alt="Workbench icon">
 
-可扩展的 Windows 原生桌面工作台，包含浙江大学校园网自动认证和 SSH 反向代理隧道。v1.2.0 新增后台守护、异常隔离、本地诊断与多尺寸图标。
+可扩展的 Windows 原生桌面工作台，包含浙江大学校园网自动认证和 SSH 反向代理隧道。v1.2.1 增加密码保存状态提示和保留数据的本机日用版部署。
 
 ## 使用
 
@@ -62,3 +62,18 @@ v1.2.0 已通过 57 项自动检查，并在 Windows 实测工作进程被终止
 维护采用唯一 main 分支、不可移动的版本标签和一个正式 Release 页面。新版置顶，保留历史说明及实际附件。update.json 提供版本、下载地址与摘要；当前应用不自动下载更新。发布前检查暂存区无私人信息，上传后下载校验 SHA-256。
 
 卸载前取消登录启动并停止常驻，再删除便携目录。清除账户可用“删除已存凭据”；彻底清除配置需自行移除上述本地应用数据目录。
+
+## 日用版与开发版同步
+
+密码输入框下方会显示“已保存密码（Windows 加密）”。输入新密码时显示“尚未保存”；修改账号、删除密码或无法解密时分别提示下一步操作。输入框清空不会清除已保存的密码。
+
+首次在本机配置日用安装（路径仅为示例）：
+
+```powershell
+.\build.ps1 -Test -SkipDeploy
+.\deploy.ps1 -TargetPath 'D:\softwares\DesktopWorkbench' -DeliveryPath 'D:\Agent Workspaces\Delivery\desktop-workbench' -Register
+```
+
+这会创建桌面“工具工作台”快捷方式；原来已启用的登录启动入口会改为日用版。只替换程序、契约 DLL、说明及图标，不清空 plugins，不复制或覆盖用户数据。账户密文、认证设置和隧道配置继续使用当前用户的 LocalAppData\DesktopWorkbench。
+
+本机部署路径记录在不进入 Git 的 deploy.local.json。以后 `build.ps1 -Test` 全部通过后自动同步日用版和指定交付目录；原来在运行则恢复运行，原来主动退出则保持停止。`-SkipDeploy` 可仅验证构建，未通过测试的二进制不能部署。CI 没有本机路径配置，不执行本机安装。更新时仅短暂停止本工作台及其隧道。
