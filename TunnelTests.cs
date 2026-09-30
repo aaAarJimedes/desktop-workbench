@@ -49,7 +49,7 @@ class TunnelTests {
         r=TunnelProbe.Parse(response.Replace("200 0 exit=0","200 60 exit=60"),18080);Check(!r.ExternalOk,"TLS failure is not connectivity success");
         r=TunnelProbe.Parse("unexpected output",18080);Check(!r.ExternalOk&&!r.LoopbackOnly,"missing evidence never passes");
         string path=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"tunnel-test-"+Guid.NewGuid().ToString("N")+".json");
-        try{var c=new TunnelConfig();c.Profiles.Add(p);c.Save(path);c.Profiles[0].AutoStart=true;c.Save(path);Check(TunnelConfig.Load(path).Profiles[0].AutoStart,"atomic settings survive reload");}finally{if(File.Exists(path))File.Delete(path);}
+        try{var c=new TunnelConfig();c.Profiles.Add(p);c.Save(path);c.Profiles[0].AutoStart=true;c.Save(path);Check(TunnelConfig.Load(path).Profiles[0].AutoStart,"atomic settings survive reload");}finally{if(File.Exists(path))File.Delete(path);if(File.Exists(path+".bak"))File.Delete(path+".bak");}
     }
     static void WaitReady(TunnelSession session,string name){var until=DateTime.UtcNow.AddSeconds(30);while(DateTime.UtcNow<until){session.Tick(DateTime.UtcNow);var s=session.Snapshot();if(s.Connected){Check(true,name+" SSH forwarding confirmed; PID="+s.ProcessId);return;}if(!s.Desired)throw new Exception(name+": "+s.Detail);Thread.Sleep(200);}throw new Exception(name+" connection timeout: "+session.Snapshot().Detail);}
     static void Live(string path){

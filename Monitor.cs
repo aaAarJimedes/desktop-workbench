@@ -14,7 +14,7 @@ namespace Workbench {
         public List<DateTime> Attempts = new List<DateTime>();
     }
     public static class Storage {
-        public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"DesktopWorkbench");
+        public static readonly string Root = DataLocation.Root;
         static readonly object Gate = new object();
         public static Settings Load() {
             string path = Path.Combine(Root,"settings.json");

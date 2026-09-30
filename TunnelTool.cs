@@ -15,18 +15,21 @@ namespace Workbench {
         readonly Dictionary<string,TunnelSession> sessions=new Dictionary<string,TunnelSession>();
         readonly Dictionary<string,string> results=new Dictionary<string,string>();
         readonly Dictionary<string,string> lastStates=new Dictionary<string,string>();
+        readonly string configPath;
         TunnelConfig config;string loadError;
-        Panel view;DataGridView grid;Label detail;TextBox diagnostic;ListBox events;Button start,stop,edit,remove,test,copy;
+        Panel view;DataGridView grid;Label detail,saved;TextBox diagnostic;ListBox events;Button start,stop,edit,remove,test,copy;
         System.Threading.Timer timer;SynchronizationContext ui;int ticking,testing;string testingId;volatile bool disposed;
-        public TunnelTool(){try{config=TunnelConfig.Load(TunnelConfig.DefaultPath);}catch{config=new TunnelConfig();loadError="隧道配置无法读取。原文件已保留；请检查 tunnels.json 后重启工作台。";}}
+        public TunnelTool():this(TunnelConfig.DefaultPath){}
+        internal TunnelTool(string path){configPath=path;try{config=TunnelConfig.Load(configPath);RuntimeLog.Write("tunnel-loaded-count-"+config.Profiles.Count,null);}catch(Exception e){RuntimeLog.Write("tunnel-load",e);config=new TunnelConfig();loadError="隧道配置无法读取。原文件已保留；请检查配置后点击重新加载。";}}
         public Control CreateView(){
             view=new Panel{Dock=DockStyle.Fill,Padding=new Padding(28),BackColor=Color.FromArgb(246,248,252),AutoScroll=true};
             var body=new TableLayoutPanel{Dock=DockStyle.Top,AutoSize=true,ColumnCount=1};view.Controls.Add(body);
             body.Controls.Add(Text("服务器隧道",25,FontStyle.Bold,54));
             body.Controls.Add(Text("把本机代理连接到校内服务器，让远程工作继续。",11,FontStyle.Regular,38));
+            saved=Text("",9,FontStyle.Regular,32);body.Controls.Add(saved);
             var actions=new FlowLayoutPanel{AutoSize=true,Dock=DockStyle.Top,Margin=new Padding(0,8,0,12)};
             actions.Controls.Add(Button("新增服务器",()=>Edit(null)));edit=Button("编辑",()=>Edit(Selected()));actions.Controls.Add(edit);
-            remove=Button("删除",Remove);actions.Controls.Add(remove);body.Controls.Add(actions);
+            remove=Button("删除",Remove);actions.Controls.Add(remove);actions.Controls.Add(Button("重新加载",()=>ReloadSaved()));actions.Controls.Add(Button("配置目录",()=>System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(System.IO.Path.GetDirectoryName(configPath)){UseShellExecute=true})));body.Controls.Add(actions);
             grid=new DataGridView{Dock=DockStyle.Top,Height=205,ReadOnly=true,AllowUserToAddRows=false,AllowUserToDeleteRows=false,AllowUserToResizeRows=false,RowHeadersVisible=false,SelectionMode=DataGridViewSelectionMode.FullRowSelect,MultiSelect=false,BackgroundColor=Color.White,BorderStyle=BorderStyle.None,AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill};
             grid.DefaultCellStyle.SelectionBackColor=Color.FromArgb(222,239,236);grid.DefaultCellStyle.SelectionForeColor=Color.FromArgb(24,37,56);grid.RowTemplate.Height=38;grid.ColumnHeadersHeight=32;grid.ColumnHeadersHeightSizeMode=DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
             grid.Columns.Add("name","服务器");grid.Columns.Add("route","远端 → 本机");grid.Columns.Add("state","连接状态");grid.Columns.Add("auto","自动启动");
@@ -40,9 +43,17 @@ namespace Workbench {
             diagnostic=new TextBox{Dock=DockStyle.Top,Height=126,Multiline=true,ReadOnly=true,ScrollBars=ScrollBars.Vertical,BackColor=Color.White,BorderStyle=BorderStyle.FixedSingle};body.Controls.Add(diagnostic);
             body.Controls.Add(Text("远端仅监听 127.0.0.1。电脑和本机代理需保持运行。\nSSH 密钥复用 Windows ssh-agent，不保存服务器密码。",9,FontStyle.Regular,52));
             body.Controls.Add(Text("最近活动",12,FontStyle.Bold,32));events=new ListBox{Dock=DockStyle.Top,Height=90,BorderStyle=BorderStyle.None};body.Controls.Add(events);
-            if(loadError!=null){actions.Enabled=false;detail.Text=loadError;diagnostic.Text=TunnelConfig.DefaultPath;}
+            if(loadError!=null){detail.Text=loadError;diagnostic.Text=configPath;}
             foreach(var p in config.Profiles){sessions.Add(p.Id,new TunnelSession(p));AddRow(p);}
-            Selection();return view;
+            SavedStatus();Selection();view.VisibleChanged+=(s,e)=>{if(view.Visible&&config.Profiles.Count==0)ReloadSaved();};return view;
+        }
+        void SavedStatus(){saved.Text=loadError!=null?"读取失败，未覆盖已存配置。":(config.RecoveredFromBackup?"已从备份恢复 ":"已保存 ")+config.Profiles.Count+" 条常用隧道 · 重启后保留；自动启动可在编辑中设置。";}
+        bool ReloadSaved(){
+            try{
+                var next=TunnelConfig.Load(configPath);
+                lock(gate){foreach(var session in sessions.Values)session.Dispose();sessions.Clear();config=next;foreach(var p in config.Profiles){var session=new TunnelSession(p);sessions.Add(p.Id,session);if(timer!=null&&p.AutoStart)session.Start();}}
+                loadError=null;results.Clear();lastStates.Clear();grid.Rows.Clear();foreach(var p in config.Profiles)AddRow(p);SavedStatus();Selection();RuntimeLog.Write("tunnel-reloaded-count-"+config.Profiles.Count,null);return true;
+            }catch(Exception error){RuntimeLog.Write("tunnel-reload",error);loadError="配置读取失败，现有连接和原文件已保留。";SavedStatus();detail.Text=loadError;return false;}
         }
         static Label Text(string text,float size,FontStyle style,int height){return new Label{Text=text,Dock=DockStyle.Top,Height=height,Font=new Font("Microsoft YaHei UI",size,style),TextAlign=ContentAlignment.MiddleLeft,AutoEllipsis=true,Margin=new Padding(0)};}
         static Button Button(string text,Action action){var b=new Button{Text=text,AutoSize=true,MinimumSize=new Size(85,36),FlatStyle=FlatStyle.Flat,BackColor=Color.White,Margin=new Padding(0,0,10,0)};b.FlatAppearance.BorderColor=Color.FromArgb(213,221,230);b.Click+=(s,e)=>action();return b;}
@@ -51,25 +62,26 @@ namespace Workbench {
         void Selection(){
             if(start==null)return;var p=Selected();bool exists=p!=null;
             start.Enabled=stop.Enabled=edit.Enabled=remove.Enabled=copy.Enabled=exists&&loadError==null;test.Enabled=exists&&Volatile.Read(ref testing)==0;
-            if(!exists){if(loadError==null)detail.Text="还没有连接。点击“新增服务器”添加 SSH 目标与代理端口。";diagnostic.Text=loadError==null?"启动后点击“测试外网”，分别验证服务器监听范围和 HTTPS 出口。":TunnelConfig.DefaultPath;return;}
+            if(!exists){detail.Text=loadError??(config.Profiles.Count==0?"还没有连接。点击“新增服务器”添加并保存常用隧道。":"请在上方选择已保存的常用隧道。");diagnostic.Text=loadError==null?"启动后点击“测试外网”，分别验证服务器监听范围和 HTTPS 出口。":configPath;return;}
             TunnelSession session;lock(gate)sessions.TryGetValue(p.Id,out session);if(session==null)return;
             var state=session.Snapshot();start.Enabled=!state.Desired;stop.Enabled=state.Desired||state.ProcessId!=0;
             detail.Text=p.User+"@"+p.Host+":"+p.SshPort+"    "+state.Status+"\n"+state.Detail;
             string result;diagnostic.Text=testingId==p.Id?"正在从服务器测试 HTTPS 出口，最长约 50 秒…":results.TryGetValue(p.Id,out result)?result:"尚未测试。点击“测试外网”检查服务器的 HTTPS 连接。";
         }
         void Edit(TunnelProfile existing){
+            if(config.Profiles.Count==0&&!ReloadSaved())return;
             if(loadError!=null)return;
             using(var dialog=new TunnelEditor(existing)){
                 if(dialog.ShowDialog(view.FindForm())!=DialogResult.OK)return;
                 var replacement=dialog.Profile;var next=new TunnelConfig();next.Profiles=config.Profiles.Where(p=>existing==null||p.Id!=existing.Id).ToList();next.Profiles.Add(replacement);
-                try{next.Save(TunnelConfig.DefaultPath);}catch(Exception e){MessageBox.Show(e.Message,"无法保存连接");return;}
+                try{next.Save(configPath);}catch(Exception e){MessageBox.Show(e.Message,"无法保存连接");return;}
                 lock(gate){if(existing!=null){sessions[existing.Id].Dispose();sessions.Remove(existing.Id);}sessions.Add(replacement.Id,new TunnelSession(replacement));}
-                results.Remove(replacement.Id);config=next;grid.Rows.Clear();foreach(var p in config.Profiles)AddRow(p);grid.Rows[grid.Rows.Count-1].Selected=true;Selection();Log(replacement.Name+"：配置已保存，点击启动应用。 ");
+                results.Remove(replacement.Id);config=next;grid.Rows.Clear();foreach(var p in config.Profiles)AddRow(p);grid.Rows[grid.Rows.Count-1].Selected=true;SavedStatus();Selection();Log(replacement.Name+"：已保存为常用隧道，重启后保留。 ");
             }
         }
         void Remove(){var p=Selected();if(p==null)return;if(MessageBox.Show("删除连接“"+p.Name+"”？只删除工作台配置，不删除密钥或服务器文件。","删除连接",MessageBoxButtons.OKCancel)!=DialogResult.OK)return;
-            var next=new TunnelConfig();next.Profiles=config.Profiles.Where(x=>x.Id!=p.Id).ToList();try{next.Save(TunnelConfig.DefaultPath);}catch{MessageBox.Show("保存失败，连接未删除。");return;}
-            lock(gate){sessions[p.Id].Dispose();sessions.Remove(p.Id);}config=next;grid.Rows.RemoveAt(grid.SelectedRows[0].Index);Selection();Log(p.Name+"：已删除连接");}
+            var next=new TunnelConfig();next.Profiles=config.Profiles.Where(x=>x.Id!=p.Id).ToList();try{next.Save(configPath);}catch{MessageBox.Show("保存失败，连接未删除。");return;}
+            lock(gate){sessions[p.Id].Dispose();sessions.Remove(p.Id);}config=next;grid.Rows.RemoveAt(grid.SelectedRows[0].Index);SavedStatus();Selection();Log(p.Name+"：已删除连接");}
         void StartSelected(){var p=Selected();if(p==null)return;lock(gate)sessions[p.Id].Start();results.Remove(p.Id);Selection();}
         void StopSelected(){var p=Selected();if(p==null)return;lock(gate)sessions[p.Id].Stop();results.Remove(p.Id);Selection();Log(p.Name+"：已停止；随工作台启动的选项保持原设置");}
         void CopyProxy(){var p=Selected();if(p==null)return;Clipboard.SetText("export http_proxy=http://127.0.0.1:"+p.RemotePort+"\nexport https_proxy=\"$http_proxy\"\nexport HTTP_PROXY=\"$http_proxy\"\nexport HTTPS_PROXY=\"$http_proxy\"\nexport no_proxy=\"${no_proxy:+$no_proxy,}localhost,127.0.0.1,::1\"\nexport NO_PROXY=\"${NO_PROXY:+$NO_PROXY,}localhost,127.0.0.1,::1\"\n");Log(p.Name+"：已复制当前远端 shell 可用的代理命令");}
@@ -82,6 +94,8 @@ namespace Workbench {
         }
         void Log(string text){events.Items.Insert(0,DateTime.Now.ToString("HH:mm:ss")+"  "+text);while(events.Items.Count>60)events.Items.RemoveAt(events.Items.Count-1);}
         public void Start(){
+            if(timer!=null)return;
+            if(config.Profiles.Count==0)ReloadSaved();
             ui=SynchronizationContext.Current;
             foreach(var p in config.Profiles)if(p.AutoStart)sessions[p.Id].Start();
             timer=new System.Threading.Timer(_=>{

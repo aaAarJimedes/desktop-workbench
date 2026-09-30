@@ -1,6 +1,24 @@
 ﻿param([string]$TargetPath, [string]$DeliveryPath, [switch]$Register)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
+function Start-Resident([string]$exe) {
+    # The task service owns the launcher lifetime, not the development terminal's job.
+    $taskName = 'DesktopWorkbench.Launch'
+    $prior = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    if ($prior -and @($prior.Actions | Where-Object {$_.Execute -notin $allowed}).Count) { throw 'Launch task belongs to another installation.' }
+    $action = New-ScheduledTaskAction -Execute $exe -Argument '--tray' -WorkingDirectory (Split-Path -Parent $exe)
+    $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value) -LogonType Interactive -RunLevel Limited
+    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
+    Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Description 'Launch Desktop Workbench independently of the development terminal; on demand only.' -Force | Out-Null
+    Start-ScheduledTask -TaskName $taskName
+    $deadline = [DateTime]::UtcNow.AddSeconds(15)
+    do {
+        $worker = @(Get-CimInstance Win32_Process -Filter "Name='Workbench.exe'" | Where-Object {$_.ExecutablePath -eq $exe -and $_.CommandLine -match '--worker'})
+        if ($worker.Count -eq 1) { return }
+        Start-Sleep -Milliseconds 300
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw 'The daily application did not start; inspect DesktopWorkbench.Launch and runtime.log.'
+}
 $configPath = Join-Path $root 'deploy.local.json'
 if (!$TargetPath) {
     if (!(Test-Path -LiteralPath $configPath)) { throw 'Specify -TargetPath and -Register for initial setup.' }
@@ -36,7 +54,15 @@ if ($oldExe) {
     do { $live = @($running | Where-Object {Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue}); if (!$live.Count) {break}; Start-Sleep -Milliseconds 250 } while ([DateTime]::UtcNow -lt $deadline)
     if ($live.Count) { throw 'Workbench is still running; no files replaced.' }
 }
-$dataRoot = Join-Path $env:LOCALAPPDATA 'DesktopWorkbench'
+$dataRoot = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.desktop-workbench'
+$legacyRoot = Join-Path $env:LOCALAPPDATA 'DesktopWorkbench'
+New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
+$migrateAccount = !(Test-Path -LiteralPath (Join-Path $dataRoot 'settings.json')) -and !(Test-Path -LiteralPath (Join-Path $dataRoot 'credential.dat'))
+foreach ($name in @('credential.dat','settings.json','tunnels.json','tunnels.json.bak')) {
+    if ($name -in @('credential.dat','settings.json') -and !$migrateAccount) { continue }
+    $from=Join-Path $legacyRoot $name; $to=Join-Path $dataRoot $name
+    if ((Test-Path -LiteralPath $from) -and !(Test-Path -LiteralPath $to)) { Copy-Item -LiteralPath $from -Destination $to }
+}
 $dataHashes = @{}
 foreach ($name in @('credential.dat','settings.json','tunnels.json')) { $p=Join-Path $dataRoot $name; if(Test-Path -LiteralPath $p){$dataHashes[$name]=(Get-FileHash -LiteralPath $p).Hash} }
 $backup = Join-Path "$root\build" ('deploy-backup-'+[Guid]::NewGuid().ToString('N'))
@@ -74,10 +100,10 @@ try {
     $succeeded=$true
 } catch {
     foreach($item in $written){if($item.Existed){Copy-Item -LiteralPath $item.Backup -Destination $item.Path -Force}else{Remove-Item -LiteralPath $item.Path -ErrorAction SilentlyContinue}}
-    if($oldExe){Start-Process -FilePath $oldExe -ArgumentList '--tray' -WindowStyle Hidden}
+    if($oldExe){Start-Resident $oldExe}
     throw
 } finally {
     if($succeeded){Get-ChildItem -LiteralPath $backup -File | ForEach-Object {Remove-Item -LiteralPath $_.FullName}; Remove-Item -LiteralPath $backup}
 }
-if($restart){Start-Process -FilePath (Join-Path $TargetPath 'Workbench.exe') -ArgumentList '--tray' -WindowStyle Hidden}
+if($restart){Start-Resident (Join-Path $TargetPath 'Workbench.exe')}
 Write-Output "Deployed tested build to $TargetPath; user data preserved; desktop shortcut updated."

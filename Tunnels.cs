@@ -28,6 +28,7 @@ namespace Workbench {
         public string Endpoint { get { return Host.ToLowerInvariant()+":"+SshPort+":"+RemotePort; } }
     }
     public sealed class TunnelConfig {
+        [ScriptIgnore] public bool RecoveredFromBackup {get;private set;}
         public int Version = 1;
         public List<TunnelProfile> Profiles = new List<TunnelProfile>();
         public void Validate() {
@@ -40,7 +41,16 @@ namespace Workbench {
         }
         public static string DefaultPath { get { return Path.Combine(Storage.Root,"tunnels.json"); } }
         public static TunnelConfig Load(string path) {
-            if (!File.Exists(path)) return new TunnelConfig();
+            bool missing=false;Exception failure=null;
+            try {return Read(path);}
+            catch(FileNotFoundException){missing=true;}
+            catch(DirectoryNotFoundException){missing=true;}
+            catch(Exception e){failure=e;}
+            try{var recovered=Read(path+".bak");recovered.RecoveredFromBackup=true;return recovered;}
+            catch(FileNotFoundException){if(missing)return new TunnelConfig();throw new InvalidDataException("隧道配置无法读取",failure);}
+            catch(DirectoryNotFoundException){if(missing)return new TunnelConfig();throw new InvalidDataException("隧道配置无法读取",failure);}
+        }
+        static TunnelConfig Read(string path) {
             var c = new JavaScriptSerializer().Deserialize<TunnelConfig>(File.ReadAllText(path));
             if (c == null) throw new InvalidDataException("隧道配置为空"); c.Validate(); return c;
         }
@@ -49,7 +59,12 @@ namespace Workbench {
             string stage = path+"."+Guid.NewGuid().ToString("N")+".tmp";
             try {
                 File.WriteAllText(stage,new JavaScriptSerializer().Serialize(this),new UTF8Encoding(false));
-                if (File.Exists(path)) File.Replace(stage,path,null); else File.Move(stage,path);
+                if (File.Exists(path)) {
+                    bool valid=true;try{Read(path);}catch{valid=false;}
+                    if(!valid)File.Copy(path,path+".unreadable-"+DateTime.UtcNow.Ticks);
+                    File.Replace(stage,path,valid?path+".bak":null);
+                } else File.Move(stage,path);
+                if(!File.Exists(path+".bak"))File.Copy(path,path+".bak");
             } finally { if (File.Exists(stage)) File.Delete(stage); }
         }
     }

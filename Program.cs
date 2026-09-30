@@ -33,18 +33,18 @@ namespace Workbench {
                 try {foreach(Type t in Assembly.LoadFrom(file).GetTypes())if(typeof(IWorkbenchTool).IsAssignableFrom(t)&&!t.IsAbstract&&t.GetConstructor(Type.EmptyTypes)!=null)Register((IWorkbenchTool)Activator.CreateInstance(t));}
                 catch(Exception error) {RuntimeLog.Write("plugin-load",error);nav.Controls.Add(new Label {Text="有扩展加载失败",ForeColor=Color.Orange,Width=175,Height=32});}
             }
-            nav.Controls.Add(new Label {Text="本地运行 · v1.2.1\n\n已安装 "+tools.Count+" 个工具\n\n后台守护已启用",ForeColor=Color.FromArgb(162,181,203),Width=175,Height=140,Margin=new Padding(0,35,0,0)});
+            nav.Controls.Add(new Label {Text="本地运行 · v1.2.2\n\n已安装 "+tools.Count+" 个工具\n\n后台守护已启用",ForeColor=Color.FromArgb(162,181,203),Width=175,Height=140,Margin=new Padding(0,35,0,0)});
             var menu=new ContextMenuStrip();menu.Items.Add("打开工作台",null,(s,e)=>ShowWindow());menu.Items.Add("打开诊断日志目录",null,(s,e)=>{Directory.CreateDirectory(RuntimeLog.DirectoryPath);System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(RuntimeLog.DirectoryPath){UseShellExecute=true});});menu.Items.Add("停止常驻并退出",null,(s,e)=>Exit());
             tray=new NotifyIcon {Icon=Branding.Icon(32),Text="工具工作台 · 校园网与服务器隧道",ContextMenuStrip=menu,Visible=true};tray.DoubleClick+=(s,e)=>ShowWindow();
             showEvent=new EventWaitHandle(false,EventResetMode.AutoReset,Resident.Scope+".show");stopEvent=new EventWaitHandle(false,EventResetMode.ManualReset,Resident.Scope+".stop");
             residentTimer.Tick+=(s,e)=>RuntimeLog.Guard("resident-ui",()=>{if(stopEvent.WaitOne(0)){Exit();return;}if(showEvent.WaitOne(0))ShowWindow();});
             if(tools.Count>0)ShowTool(tools[0].Id);
             Shown+=(s,e)=>{foreach(var tool in tools)RuntimeLog.Guard("tool-start",tool.Start);residentTimer.Start();if(hidden)Hide();};
-            FormClosing+=(s,e)=>{if(!exiting&&e.CloseReason==CloseReason.UserClosing){e.Cancel=true;Hide();tray.ShowBalloonTip(1800,"工具工作台","已在托盘继续运行；右键托盘图标可停止常驻。",ToolTipIcon.Info);}else Resident.Stop();};
+            FormClosing+=(s,e)=>{RuntimeLog.Write("window-close-"+e.CloseReason+(exiting?"-explicit":""),null);if(!exiting&&e.CloseReason==CloseReason.UserClosing){e.Cancel=true;Hide();tray.ShowBalloonTip(1800,"工具工作台","已在托盘继续运行；右键托盘图标可停止常驻。",ToolTipIcon.Info);}else if(exiting||e.CloseReason==CloseReason.WindowsShutDown)Resident.Stop();};
             FormClosed+=(s,e)=>{residentTimer.Stop();residentTimer.Dispose();foreach(var tool in tools)RuntimeLog.Guard("tool-stop",tool.Dispose);tray.Visible=false;var icon=tray.Icon;tray.Dispose();icon.Dispose();showEvent.Dispose();stopEvent.Dispose();};
         }
         void TryRegister(Func<IWorkbenchTool> factory,string name){try{Register(factory());}catch(Exception e){RuntimeLog.Write("tool-load",e);nav.Controls.Add(new Label{Text=name+"加载失败\n查看托盘诊断日志",ForeColor=Color.Orange,Width=175,Height=60});}}
-        void Exit(){exiting=true;Resident.Stop();Close();}
+        void Exit(){exiting=true;RuntimeLog.Write("explicit-stop",null);Resident.Stop();Close();}
         protected override void WndProc(ref Message m){base.WndProc(ref m);if(m.Msg==TaskbarCreated&&tray!=null&&!exiting)RuntimeLog.Guard("tray-restore",()=>{tray.Visible=false;tray.Visible=true;});}
         void Register(IWorkbenchTool tool) {
             if(views.ContainsKey(tool.Id))throw new InvalidOperationException("重复工具标识");
@@ -57,7 +57,8 @@ namespace Workbench {
     }
     static class Program {
         [STAThread] static int Main(string[] args) {
-            if(Array.IndexOf(args,"--quit")>=0){Resident.Stop();return 0;}
+            try{DataLocation.MigrateLegacy();}catch(Exception e){RuntimeLog.Write("data-migration",e);return 1;}
+            if(Array.IndexOf(args,"--quit")>=0){RuntimeLog.Write("command-stop",null);Resident.Stop();return 0;}
             if(Array.IndexOf(args,"--worker")<0)return Resident.Supervise(Application.ExecutablePath,Array.IndexOf(args,"--tray")>=0,Resident.Scope);
             ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
@@ -67,8 +68,8 @@ namespace Workbench {
             Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
             bool created;
             using(var mutex=new Mutex(true,@"Local\DesktopWorkbench-"+Environment.UserName,out created)){
-                if(!created){Resident.Show();return 0;}
-                try {Application.Run(new Shell(Array.IndexOf(args,"--tray")>=0));return 0;}
+                if(!created){Resident.Show();return Resident.AlreadyRunning;}
+                try {Application.Run(new Shell(Array.IndexOf(args,"--tray")>=0));RuntimeLog.Write("message-loop-ended",null);return 0;}
                 catch(Exception e) {RuntimeLog.Write("worker-startup",e);return 1;}
             }
         }
