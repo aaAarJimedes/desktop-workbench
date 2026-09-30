@@ -33,7 +33,7 @@ namespace Workbench {
                 try {foreach(Type t in Assembly.LoadFrom(file).GetTypes())if(typeof(IWorkbenchTool).IsAssignableFrom(t)&&!t.IsAbstract&&t.GetConstructor(Type.EmptyTypes)!=null)Register((IWorkbenchTool)Activator.CreateInstance(t));}
                 catch(Exception error) {RuntimeLog.Write("plugin-load",error);nav.Controls.Add(new Label {Text="有扩展加载失败",ForeColor=Color.Orange,Width=175,Height=32});}
             }
-            nav.Controls.Add(new Label {Text="本地运行 · v1.2.2\n\n已安装 "+tools.Count+" 个工具\n\n后台守护已启用",ForeColor=Color.FromArgb(162,181,203),Width=175,Height=140,Margin=new Padding(0,35,0,0)});
+            nav.Controls.Add(new Label {Text="本地运行 · v1.2.3\n\n已安装 "+tools.Count+" 个工具\n\n后台守护已启用",ForeColor=Color.FromArgb(162,181,203),Width=175,Height=140,Margin=new Padding(0,35,0,0)});
             var menu=new ContextMenuStrip();menu.Items.Add("打开工作台",null,(s,e)=>ShowWindow());menu.Items.Add("打开诊断日志目录",null,(s,e)=>{Directory.CreateDirectory(RuntimeLog.DirectoryPath);System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(RuntimeLog.DirectoryPath){UseShellExecute=true});});menu.Items.Add("停止常驻并退出",null,(s,e)=>Exit());
             tray=new NotifyIcon {Icon=Branding.Icon(32),Text="工具工作台 · 校园网与服务器隧道",ContextMenuStrip=menu,Visible=true};tray.DoubleClick+=(s,e)=>ShowWindow();
             showEvent=new EventWaitHandle(false,EventResetMode.AutoReset,Resident.Scope+".show");stopEvent=new EventWaitHandle(false,EventResetMode.ManualReset,Resident.Scope+".stop");
@@ -57,7 +57,13 @@ namespace Workbench {
     }
     static class Program {
         [STAThread] static int Main(string[] args) {
+            if(Array.IndexOf(args,"--native-context")<0){
+                try{return NativeProcess.Launch(Application.ExecutablePath,args,Array.IndexOf(args,"--quit")>=0||Array.IndexOf(args,"--migrate-data")>=0);}
+                catch(Exception){if(Array.IndexOf(args,"--migrate-data")<0&&Array.IndexOf(args,"--quit")<0)MessageBox.Show("无法在原生 Windows 环境启动工作台。请检查当前用户的任务计划程序权限。为避免生成另一份配置，本次启动已停止。","工具工作台");return 1;}
+            }
+            NativeProcess.Acknowledge(args);
             try{DataLocation.MigrateLegacy();}catch(Exception e){RuntimeLog.Write("data-migration",e);return 1;}
+            if(Array.IndexOf(args,"--migrate-data")>=0)return 0;
             if(Array.IndexOf(args,"--quit")>=0){RuntimeLog.Write("command-stop",null);Resident.Stop();return 0;}
             if(Array.IndexOf(args,"--worker")<0)return Resident.Supervise(Application.ExecutablePath,Array.IndexOf(args,"--tray")>=0,Resident.Scope);
             ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;

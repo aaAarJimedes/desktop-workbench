@@ -1,5 +1,5 @@
 using System.Reflection;
 [assembly: AssemblyTitle("Desktop Workbench")]
 [assembly: AssemblyDescription("Extensible desktop tools and ZJU network authentication monitor")]
-[assembly: AssemblyVersion("1.2.2.0")]
-[assembly: AssemblyFileVersion("1.2.2.0")]
+[assembly: AssemblyVersion("1.2.3.0")]
+[assembly: AssemblyFileVersion("1.2.3.0")]

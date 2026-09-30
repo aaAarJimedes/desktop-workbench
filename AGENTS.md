@@ -12,5 +12,5 @@ When this repository belongs to the registered D:\Agent Workspaces workspace, re
 
 - If deploy.local.json exists, build.ps1 -Test synchronizes the tested daily installation and preserves user data. Use -SkipDeploy only for isolated verification; complete normal deployment before delivering an app update.
 
-- DataLocation.Root uses the user profile (.desktop-workbench) to avoid packaged-host AppData redirection. Validate ordinary desktop/task-service launches, not only development-host launches. Preserve old data during migration.
+- DataLocation.Root always uses the native Windows LocalApplicationData/DesktopWorkbench known folder, independent of the executable directory. Launch through the current-user task service to avoid packaged-host filesystem redirection; temporary launch tasks must be removed after acknowledgement. Validate both native and development-host launches. Verify data before deleting a migrated legacy directory.
 - Keep the daily on-demand launch task at limited interactive permissions, with no triggers, no execution time limit, and no battery termination. It must be independent of the development terminal.

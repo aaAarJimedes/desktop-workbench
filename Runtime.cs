@@ -46,7 +46,7 @@ namespace Workbench {
                     while(!stop.WaitOne(0)) {
                         DateTime started=DateTime.UtcNow;
                         try{
-                            var info=new ProcessStartInfo(exe,"--worker"+((hidden||!first)?" --tray":"")){UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=Path.GetDirectoryName(exe)};
+                            var info=new ProcessStartInfo(exe,"--worker --native-context"+((hidden||!first)?" --tray":"")){UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=Path.GetDirectoryName(exe)};
                             using(var child=Process.Start(info)){
                                 RuntimeLog.Write("worker-start-pid-"+child.Id,null);
                                 while(!child.WaitForExit(500))if(stop.WaitOne(0)){RuntimeLog.Write("supervisor-stop-requested",null);if(!child.WaitForExit(7000))child.Kill();return 0;}

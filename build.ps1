@@ -6,14 +6,14 @@ New-Item -ItemType Directory -Force -Path $build | Out-Null
 $marker = Join-Path $build 'tested-build.json'
 if (Test-Path -LiteralPath $marker) { Remove-Item -LiteralPath $marker }
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-$refs = @('/r:System.Windows.Forms.dll','/r:System.Drawing.dll','/r:System.Web.Extensions.dll','/r:System.Security.dll')
+$refs = @('/r:System.Windows.Forms.dll','/r:System.Drawing.dll','/r:System.Web.Extensions.dll','/r:System.Security.dll','/r:Microsoft.CSharp.dll')
 & $compiler /nologo /target:exe /out:"$build\IconBuilder.exe" /r:System.Drawing.dll "$root\IconBuilder.cs"
 if ($LASTEXITCODE -ne 0) { throw 'Icon compiler failed' }
 & "$build\IconBuilder.exe" "$root\assets"
 if ($LASTEXITCODE -ne 0) { throw 'Icon generation failed' }
 & $compiler /nologo /target:library /out:"$build\Workbench.Contracts.dll" @refs "$root\Contracts.cs"
 if ($LASTEXITCODE -ne 0) { throw 'Contract compilation failed' }
-$src = @("$root\DataLocation.cs","$root\Network.cs","$root\Monitor.cs","$root\CampusTool.cs","$root\Tunnels.cs","$root\TunnelTool.cs","$root\Runtime.cs","$root\Program.cs","$root\AssemblyInfo.cs")
+$src = @("$root\NativeProcess.cs","$root\DataLocation.cs","$root\Network.cs","$root\Monitor.cs","$root\CampusTool.cs","$root\Tunnels.cs","$root\TunnelTool.cs","$root\Runtime.cs","$root\Program.cs","$root\AssemblyInfo.cs")
 & $compiler /nologo /target:winexe /out:"$build\Workbench.exe" /win32icon:"$root\assets\workbench.ico" "/resource:$root\assets\workbench.ico,Workbench.Icon.ico" /r:"$build\Workbench.Contracts.dll" @refs @src
 if ($LASTEXITCODE -ne 0) { throw 'Application compilation failed' }
 if ($Test) {

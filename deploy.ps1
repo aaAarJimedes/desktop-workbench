@@ -6,7 +6,7 @@ function Start-Resident([string]$exe) {
     $taskName = 'DesktopWorkbench.Launch'
     $prior = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
     if ($prior -and @($prior.Actions | Where-Object {$_.Execute -notin $allowed}).Count) { throw 'Launch task belongs to another installation.' }
-    $action = New-ScheduledTaskAction -Execute $exe -Argument '--tray' -WorkingDirectory (Split-Path -Parent $exe)
+    $action = New-ScheduledTaskAction -Execute $exe -Argument '--native-context --tray' -WorkingDirectory (Split-Path -Parent $exe)
     $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value) -LogonType Interactive -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
     Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Description 'Launch Desktop Workbench independently of the development terminal; on demand only.' -Force | Out-Null
@@ -54,15 +54,10 @@ if ($oldExe) {
     do { $live = @($running | Where-Object {Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue}); if (!$live.Count) {break}; Start-Sleep -Milliseconds 250 } while ([DateTime]::UtcNow -lt $deadline)
     if ($live.Count) { throw 'Workbench is still running; no files replaced.' }
 }
-$dataRoot = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.desktop-workbench'
-$legacyRoot = Join-Path $env:LOCALAPPDATA 'DesktopWorkbench'
-New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
-$migrateAccount = !(Test-Path -LiteralPath (Join-Path $dataRoot 'settings.json')) -and !(Test-Path -LiteralPath (Join-Path $dataRoot 'credential.dat'))
-foreach ($name in @('credential.dat','settings.json','tunnels.json','tunnels.json.bak')) {
-    if ($name -in @('credential.dat','settings.json') -and !$migrateAccount) { continue }
-    $from=Join-Path $legacyRoot $name; $to=Join-Path $dataRoot $name
-    if ((Test-Path -LiteralPath $from) -and !(Test-Path -LiteralPath $to)) { Copy-Item -LiteralPath $from -Destination $to }
-}
+$dataRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'DesktopWorkbench'
+# Migration must run outside the packaged development host's filesystem virtualization.
+$migrator = Start-Process -FilePath (Join-Path "$root\build" 'Workbench.exe') -ArgumentList '--migrate-data' -WindowStyle Hidden -PassThru
+if (!$migrator.WaitForExit(45000) -or $migrator.ExitCode -ne 0) { throw 'Native data migration failed; no program files replaced.' }
 $dataHashes = @{}
 foreach ($name in @('credential.dat','settings.json','tunnels.json')) { $p=Join-Path $dataRoot $name; if(Test-Path -LiteralPath $p){$dataHashes[$name]=(Get-FileHash -LiteralPath $p).Hash} }
 $backup = Join-Path "$root\build" ('deploy-backup-'+[Guid]::NewGuid().ToString('N'))

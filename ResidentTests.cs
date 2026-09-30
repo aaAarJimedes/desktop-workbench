@@ -10,7 +10,7 @@ class ResidentTests {
     static int Main(string[] args){
         string state=Environment.GetEnvironmentVariable("WB_TEST_STATE"),scope=Environment.GetEnvironmentVariable("WB_TEST_SCOPE");
         if(args.Length>0&&args[0]=="--fixture"){RuntimeLog.TestDirectory=state+".logs";return Resident.Supervise(Process.GetCurrentProcess().MainModule.FileName,false,scope);}
-        if(args.Length>0&&args[0]=="--worker"){
+        if(Array.IndexOf(args,"--worker")>=0){
             int runs=File.Exists(state)?Int32.Parse(File.ReadAllText(state))+1:1;File.WriteAllText(state,runs.ToString());
             string mode=Environment.GetEnvironmentVariable("WB_TEST_MODE");
             if(mode=="clean"){using(var stop=EventWaitHandle.OpenExisting(scope+".stop"))stop.Set();return 0;}
@@ -19,6 +19,7 @@ class ResidentTests {
                 while(!stop.WaitOne(100))if(show.WaitOne(0))File.WriteAllText(state+".shown","yes");
             }return 0;
         }
+        if(args.Length>0)throw new ArgumentException("Unknown test command");
         string root=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"resident-test-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
         try{
             var policy=new RestartPolicy();Check(policy.DelaySeconds(TimeSpan.Zero)==2,"first crash delayed two seconds");int delay=0;for(int i=0;i<20;i++)delay=policy.DelaySeconds(TimeSpan.Zero);Check(delay==300,"crash loop backoff capped at five minutes");Check(policy.DelaySeconds(TimeSpan.FromMinutes(6))==2,"stable runtime resets backoff");
