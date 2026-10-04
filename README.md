@@ -2,7 +2,7 @@
 
 <img src="assets/workbench.png" width="96" alt="Workbench icon">
 
-可扩展的 Windows 原生桌面工作台，包含浙江大学校园网自动认证和 SSH 反向代理隧道。v1.2.3 使用唯一原生 AppData 数据目录，支持任意目录便携运行。
+可扩展的 Windows 原生桌面工作台，包含浙江大学校园网自动认证、SSH 反向代理隧道和系统优化。v1.3.0 新增内存状态、后台工作集回收与托盘一键清理。
 
 ## 使用
 
@@ -87,3 +87,15 @@ v1.2.0 已通过 78 项自动检查，并在 Windows 实测工作进程被终止
 部署后通过当前用户的按需任务 DesktopWorkbench.Launch 启动日用版，使常驻生命周期独立于开发终端。该任务没有定时或登录触发器，不提升权限、不保存密码、没有运行时长或电池供电限制。已有登录启动设置仍由应用管理；卸载时可移除此任务。
 
 数据目录固定为 Windows 当前用户的原生 %LOCALAPPDATA%\DesktopWorkbench，与程序目录无关。整个便携程序目录可以移动，开发版、日用版和其他位置的副本共享同一份账户、隧道和日志。普通启动通过当前用户的临时按需任务进入原生环境，避免打包终端的 AppData 重定向；启动确认后立即删除临时任务，不需要安装服务或管理员权限。任务计划程序不可用时明确停止启动，不回退到其他数据目录。已有登录启动快捷方式在移动程序后需重新设置。换 Windows 用户或电脑时使用该用户自己的 AppData，DPAPI 密码需重新输入。首次升级可从旧的用户目录 .desktop-workbench 复制缺失配置和日志；验证迁移后可删除旧目录。
+
+## 系统优化与托盘清理
+
+第三项工具“系统优化”显示系统总内存和可用内存。点击“清理内存”，或右键工作台托盘图标直接选择“清理内存”；完成后显示前后可用内存、处理/跳过数量和耗时，并给出托盘通知。清理在后台运行，可以取消；页面与托盘共用单一任务，完成后间隔 60 秒才能再次运行，不做定时自动清理。
+
+通过 Windows 的 `EmptyWorkingSet` 回收空闲后台进程的驻留页，不结束、暂停、重启程序，也不删除文件。只处理当前用户、当前桌面会话的非系统进程，跳过关键/无权限进程、小于 64 MiB 的工作集，以及观测期间忙于 CPU 或 I/O 的进程。持续记录最近前台应用并保护其进程组；工作台自身和 SSH 子进程也受保护。操作前复核进程创建时间，避免 PID 重用；打开进程仅申请查询和工作集调整权限，不申请终止、挂起或写内存权限。
+
+可以在页面保存额外排除的进程文件名，例如 `javaw.exe`、`blender.exe`。排除列表保存在唯一原生 AppData 数据目录的 `optimization.json`，开发、交付与日用版本共享；配置损坏时禁用清理，避免忽略原排除列表。
+
+这不是释放应用仍持有的虚拟内存，也不是永久降低内存需求。应用再次访问这些页时可能发生软/硬缺页，短暂重新加载；繁忙负载可能很快回升，不保证速度提升或固定回收量。展示的是系统可用物理内存的实测净变化，可正可负；不把各进程工作集减少之和冒充系统释放量。Standby 缓存本来已包含在可用内存中，因此不强制清空系统待机/修改页列表，不修改虚拟内存或系统服务设置。
+
+参考核验：PCL 官方公开源码的 [MemoryOptimize / MemoryOptimizeInternal](https://github.com/Meloong-Git/PCL/blob/0e0d12fdce6a2804916fb2be60e41144da637c18/Plain%20Craft%20Launcher%202/Pages/PageOther/PageOtherTest.xaml.vb) 仅有占位提示，不包含百宝箱的实际算法；本工具独立实现，未复制其代码或声称等同其内部实现。Windows 行为依据 [EmptyWorkingSet](https://learn.microsoft.com/en-us/windows/win32/api/psapi/nf-psapi-emptyworkingset)、[工作集与缺页](https://learn.microsoft.com/en-us/windows/win32/memory/working-set) 和 [MEMORYSTATUSEX](https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/ns-sysinfoapi-memorystatusex)。

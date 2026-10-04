@@ -13,7 +13,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Icon compiler failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Icon generation failed' }
 & $compiler /nologo /target:library /out:"$build\Workbench.Contracts.dll" @refs "$root\Contracts.cs"
 if ($LASTEXITCODE -ne 0) { throw 'Contract compilation failed' }
-$src = @("$root\NativeProcess.cs","$root\DataLocation.cs","$root\Network.cs","$root\Monitor.cs","$root\CampusTool.cs","$root\Tunnels.cs","$root\TunnelTool.cs","$root\Runtime.cs","$root\Program.cs","$root\AssemblyInfo.cs")
+$src = @("$root\NativeProcess.cs","$root\DataLocation.cs","$root\Network.cs","$root\Monitor.cs","$root\CampusTool.cs","$root\Tunnels.cs","$root\TunnelTool.cs","$root\MemoryOptimization.cs","$root\OptimizationTool.cs","$root\Runtime.cs","$root\Program.cs","$root\AssemblyInfo.cs")
 & $compiler /nologo /target:winexe /out:"$build\Workbench.exe" /win32icon:"$root\assets\workbench.ico" "/resource:$root\assets\workbench.ico,Workbench.Icon.ico" /r:"$build\Workbench.Contracts.dll" @refs @src
 if ($LASTEXITCODE -ne 0) { throw 'Application compilation failed' }
 if ($Test) {
@@ -33,6 +33,10 @@ if ($Test) {
     if ($LASTEXITCODE -ne 0) { throw 'Saved tunnel view test compilation failed' }
     & "$build\ToolViewTests.exe"
     if ($LASTEXITCODE -ne 0) { throw 'Saved tunnel view tests failed' }
+    & $compiler /nologo /target:exe /out:"$build\MemoryTests.exe" /r:"$build\Workbench.Contracts.dll" @refs "$root\DataLocation.cs" "$root\MemoryOptimization.cs" "$root\OptimizationTool.cs" "$root\Runtime.cs" "$root\MemoryTests.cs"
+    if ($LASTEXITCODE -ne 0) { throw 'Memory test compilation failed' }
+    & "$build\MemoryTests.exe"
+    if ($LASTEXITCODE -ne 0) { throw 'Memory tests failed' }
     $tested = [ordered]@{}
     foreach ($name in @('Workbench.exe','Workbench.Contracts.dll')) { $tested[$name] = (Get-FileHash -LiteralPath (Join-Path $build $name)).Hash }
     [IO.File]::WriteAllText($marker, ($tested | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))

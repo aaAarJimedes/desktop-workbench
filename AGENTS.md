@@ -14,3 +14,5 @@ When this repository belongs to the registered D:\Agent Workspaces workspace, re
 
 - DataLocation.Root always uses the native Windows LocalApplicationData/DesktopWorkbench known folder, independent of the executable directory. Launch through the current-user task service to avoid packaged-host filesystem redirection; temporary launch tasks must be removed after acknowledgement. Validate both native and development-host launches. Verify data before deleting a migrated legacy directory.
 - Keep the daily on-demand launch task at limited interactive permissions, with no triggers, no execution time limit, and no battery termination. It must be independent of the development terminal.
+
+- Memory optimization must never terminate, suspend, restart or write another process's memory. Keep current-user/session, foreground-family, critical/system and activity exclusions, cancellation, shared cooldown, and measured available-memory reporting. Native tests may trim only their own fixture; user-app cleanup is validated through the authorized UI. Keep optimization.json private in native AppData.

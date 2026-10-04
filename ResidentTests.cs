@@ -6,7 +6,7 @@ using Workbench;
 class ResidentTests {
     static int count;
     static void Check(bool ok,string name){if(!ok)throw new Exception(name);count++;Console.WriteLine("PASS "+name);}
-    static void Until(Func<bool> done){var until=DateTime.UtcNow.AddSeconds(20);while(DateTime.UtcNow<until){if(done())return;Thread.Sleep(100);}throw new Exception("fixture timeout");}
+    static void Until(Func<bool> done){var until=DateTime.UtcNow.AddSeconds(20);while(DateTime.UtcNow<until){try{if(done())return;}catch(IOException){}Thread.Sleep(100);}throw new Exception("fixture timeout");}
     static int Main(string[] args){
         string state=Environment.GetEnvironmentVariable("WB_TEST_STATE"),scope=Environment.GetEnvironmentVariable("WB_TEST_SCOPE");
         if(args.Length>0&&args[0]=="--fixture"){RuntimeLog.TestDirectory=state+".logs";return Resident.Supervise(Process.GetCurrentProcess().MainModule.FileName,false,scope);}
