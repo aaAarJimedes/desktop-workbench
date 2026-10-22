@@ -59,7 +59,7 @@ $dataRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'De
 $migrator = Start-Process -FilePath (Join-Path "$root\build" 'Workbench.exe') -ArgumentList '--migrate-data' -WindowStyle Hidden -PassThru
 if (!$migrator.WaitForExit(45000) -or $migrator.ExitCode -ne 0) { throw 'Native data migration failed; no program files replaced.' }
 $dataHashes = @{}
-foreach ($name in @('credential.dat','settings.json','tunnels.json')) { $p=Join-Path $dataRoot $name; if(Test-Path -LiteralPath $p){$dataHashes[$name]=(Get-FileHash -LiteralPath $p).Hash} }
+foreach ($name in @('credential.dat','settings.json','tunnels.json','optimization.json','organizer.json')) { $p=Join-Path $dataRoot $name; if(Test-Path -LiteralPath $p){$dataHashes[$name]=(Get-FileHash -LiteralPath $p).Hash} }
 $backup = Join-Path "$root\build" ('deploy-backup-'+[Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $backup | Out-Null
 $written = @()

@@ -14,7 +14,7 @@ namespace Workbench {
         readonly List<IWorkbenchTool> tools=new List<IWorkbenchTool>();
         readonly Dictionary<string,Control> views=new Dictionary<string,Control>();
         readonly Panel content=new Panel {Dock=DockStyle.Fill};
-        readonly FlowLayoutPanel nav=new FlowLayoutPanel {Dock=DockStyle.Left,Width=210,FlowDirection=FlowDirection.TopDown,WrapContents=false,Padding=new Padding(18,24,12,18),BackColor=Color.FromArgb(24,37,56)};
+        readonly FlowLayoutPanel nav=new FlowLayoutPanel {Dock=DockStyle.Left,Width=210,AutoScroll=true,FlowDirection=FlowDirection.TopDown,WrapContents=false,Padding=new Padding(18,24,12,18),BackColor=Color.FromArgb(24,37,56)};
         readonly NotifyIcon tray;
         OptimizationTool optimization;
         readonly System.Windows.Forms.Timer residentTimer=new System.Windows.Forms.Timer{Interval=500};
@@ -30,18 +30,21 @@ namespace Workbench {
             TryRegister(()=>new CampusTool(),"自动联网");
             TryRegister(()=>new TunnelTool(),"服务器隧道");
             TryRegister(()=>optimization=new OptimizationTool(),"系统优化");
+            var organizer=new OrganizerStore(OrganizerStore.DefaultPath);
+            TryRegister(()=>new BookmarkTool(organizer),"网址收藏");
+            TryRegister(()=>new ScheduleTool(organizer),"待办 / 日程");
             string plugins=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"plugins");
             if(Directory.Exists(plugins))foreach(string file in Directory.GetFiles(plugins,"*.dll")){
                 try {foreach(Type t in Assembly.LoadFrom(file).GetTypes())if(typeof(IWorkbenchTool).IsAssignableFrom(t)&&!t.IsAbstract&&t.GetConstructor(Type.EmptyTypes)!=null)Register((IWorkbenchTool)Activator.CreateInstance(t));}
                 catch(Exception error) {RuntimeLog.Write("plugin-load",error);nav.Controls.Add(new Label {Text="有扩展加载失败",ForeColor=Color.Orange,Width=175,Height=32});}
             }
-            nav.Controls.Add(new Label {Text="本地运行 · v1.3.0\n\n已安装 "+tools.Count+" 个工具\n\n后台守护已启用",ForeColor=Color.FromArgb(162,181,203),Width=175,Height=140,Margin=new Padding(0,35,0,0)});
+            nav.Controls.Add(new Label {Text="本地运行 · v1.4.0\n\n已安装 "+tools.Count+" 个工具\n\n后台守护已启用",ForeColor=Color.FromArgb(162,181,203),Width=175,Height=140,Margin=new Padding(0,35,0,0)});
             var menu=new ContextMenuStrip();menu.Items.Add("打开工作台",null,(s,e)=>ShowWindow());
             if(optimization!=null&&views.ContainsKey(optimization.Id)){
                 optimization.AttachTrayMenu(menu,()=>{ShowWindow();ShowTool(optimization.Id);});menu.Items.Add(new ToolStripSeparator());
             }
             menu.Items.Add("打开诊断日志目录",null,(s,e)=>{Directory.CreateDirectory(RuntimeLog.DirectoryPath);System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(RuntimeLog.DirectoryPath){UseShellExecute=true});});menu.Items.Add("停止常驻并退出",null,(s,e)=>Exit());
-            tray=new NotifyIcon {Icon=Branding.Icon(32),Text="工具工作台 · 联网、隧道与系统优化",ContextMenuStrip=menu,Visible=true};tray.DoubleClick+=(s,e)=>ShowWindow();
+            tray=new NotifyIcon {Icon=Branding.Icon(32),Text="工具工作台 · 联网、隧道、优化、收藏与日程",ContextMenuStrip=menu,Visible=true};tray.DoubleClick+=(s,e)=>ShowWindow();
             if(optimization!=null)optimization.Completed+=message=>{if(!exiting)tray.ShowBalloonTip(5000,"系统优化",message,ToolTipIcon.Info);};
             showEvent=new EventWaitHandle(false,EventResetMode.AutoReset,Resident.Scope+".show");stopEvent=new EventWaitHandle(false,EventResetMode.ManualReset,Resident.Scope+".stop");
             residentTimer.Tick+=(s,e)=>RuntimeLog.Guard("resident-ui",()=>{if(stopEvent.WaitOne(0)){Exit();return;}if(showEvent.WaitOne(0))ShowWindow();});

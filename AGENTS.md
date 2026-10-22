@@ -16,3 +16,5 @@ When this repository belongs to the registered D:\Agent Workspaces workspace, re
 - Keep the daily on-demand launch task at limited interactive permissions, with no triggers, no execution time limit, and no battery termination. It must be independent of the development terminal.
 
 - Memory optimization must never terminate, suspend, restart or write another process's memory. Keep current-user/session, foreground-family, critical/system and activity exclusions, cancellation, shared cooldown, and measured available-memory reporting. Native tests may trim only their own fixture; user-app cleanup is validated through the authorized UI. Keep optimization.json private in native AppData.
+
+- Bookmarks and schedules share one OrganizerStore in the shell and native AppData/organizer.json. Preserve atomic saves, backup recovery and edit blocking on unreadable data. Only HTTP(S) addresses may reach the default browser. Tests use isolated files and replace only the external browser launch boundary; never publish personal organizer data.

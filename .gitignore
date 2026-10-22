@@ -10,6 +10,7 @@ deploy.local.json
 settings.json
 tunnels.json
 optimization.json
+organizer.json*
 credentials*
 *.pem
 *.key

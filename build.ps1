@@ -13,7 +13,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Icon compiler failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Icon generation failed' }
 & $compiler /nologo /target:library /out:"$build\Workbench.Contracts.dll" @refs "$root\Contracts.cs"
 if ($LASTEXITCODE -ne 0) { throw 'Contract compilation failed' }
-$src = @("$root\NativeProcess.cs","$root\DataLocation.cs","$root\Network.cs","$root\Monitor.cs","$root\CampusTool.cs","$root\Tunnels.cs","$root\TunnelTool.cs","$root\MemoryOptimization.cs","$root\OptimizationTool.cs","$root\Runtime.cs","$root\Program.cs","$root\AssemblyInfo.cs")
+$src = @("$root\NativeProcess.cs","$root\DataLocation.cs","$root\Network.cs","$root\Monitor.cs","$root\CampusTool.cs","$root\Tunnels.cs","$root\TunnelTool.cs","$root\MemoryOptimization.cs","$root\OptimizationTool.cs","$root\Organizer.cs","$root\OrganizerTools.cs","$root\Runtime.cs","$root\Program.cs","$root\AssemblyInfo.cs")
 & $compiler /nologo /target:winexe /out:"$build\Workbench.exe" /win32icon:"$root\assets\workbench.ico" "/resource:$root\assets\workbench.ico,Workbench.Icon.ico" /r:"$build\Workbench.Contracts.dll" @refs @src
 if ($LASTEXITCODE -ne 0) { throw 'Application compilation failed' }
 if ($Test) {
@@ -37,6 +37,14 @@ if ($Test) {
     if ($LASTEXITCODE -ne 0) { throw 'Memory test compilation failed' }
     & "$build\MemoryTests.exe"
     if ($LASTEXITCODE -ne 0) { throw 'Memory tests failed' }
+    & $compiler /nologo /target:exe /out:"$build\OrganizerTests.exe" @refs "$root\DataLocation.cs" "$root\Organizer.cs" "$root\OrganizerTests.cs"
+    if ($LASTEXITCODE -ne 0) { throw 'Organizer test compilation failed' }
+    & "$build\OrganizerTests.exe"
+    if ($LASTEXITCODE -ne 0) { throw 'Organizer tests failed' }
+    & $compiler /nologo /target:exe /out:"$build\OrganizerViewTests.exe" /r:"$build\Workbench.Contracts.dll" @refs "$root\DataLocation.cs" "$root\Organizer.cs" "$root\OrganizerTools.cs" "$root\OrganizerViewTests.cs"
+    if ($LASTEXITCODE -ne 0) { throw 'Organizer view test compilation failed' }
+    & "$build\OrganizerViewTests.exe"
+    if ($LASTEXITCODE -ne 0) { throw 'Organizer view tests failed' }
     $tested = [ordered]@{}
     foreach ($name in @('Workbench.exe','Workbench.Contracts.dll')) { $tested[$name] = (Get-FileHash -LiteralPath (Join-Path $build $name)).Hash }
     [IO.File]::WriteAllText($marker, ($tested | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))

@@ -2,7 +2,7 @@
 
 <img src="assets/workbench.png" width="96" alt="Workbench icon">
 
-可扩展的 Windows 原生桌面工作台，包含浙江大学校园网自动认证、SSH 反向代理隧道和系统优化。v1.3.0 新增内存状态、后台工作集回收与托盘一键清理。
+可扩展的 Windows 原生桌面工作台，包含浙江大学校园网自动认证、SSH 反向代理隧道、系统优化、网址收藏和待办 / 日程。v1.4.0 新增收藏夹管理、默认浏览器打开网址，以及日期安排和完成状态记录。
 
 ## 使用
 
@@ -41,7 +41,7 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Test
 powershell -ExecutionPolicy Bypass -File .\package.ps1
 ```
 
-构建使用 Windows 自带 C# 编译器；产物在 build/，发行包在 dist/。78 项自动检查覆盖校园网状态机与协议向量、隧道配置与生命周期、守护恢复、单实例、主动停止、日志脱敏及轮转。普通测试不连接真实账户或服务器，Windows CI 运行相同检查。
+构建使用 Windows 自带 C# 编译器；产物在 build/，发行包在 dist/。自动检查覆盖校园网状态机与协议向量、隧道配置与生命周期、守护恢复、单实例、主动停止、日志脱敏及轮转、内存清理，以及收藏与日程的持久化和实际界面操作。普通测试不连接真实账户或服务器，Windows CI 运行相同检查。
 
 新工具实现 `IWorkbenchTool`，提供唯一 Id、标题、描述、WinForms 界面、Start 和 Dispose，引用 Workbench.Contracts.dll，把 DLL 放入程序旁 plugins/ 后重启。示例见 examples/HelloTool.cs：
 
@@ -51,7 +51,7 @@ powershell -ExecutionPolicy Bypass -File .\package.ps1
 
 插件是可信进程内代码，没有沙箱。后台任务不要阻塞 UI，退出时释放资源。宿主隔离初始化、启动、停止和主要定时回调的异常。
 
-Program.cs 为宿主，Runtime.cs 管理常驻与诊断，Contracts.cs 为扩展契约，Monitor.cs/Network.cs 处理认证，Tunnels.cs 管理隧道。图标由 assets/workbench.svg 与 IconBuilder.cs 生成，覆盖 16–256 px，用于可执行文件、窗口和托盘。
+Program.cs 为宿主，Runtime.cs 管理常驻与诊断，Contracts.cs 为扩展契约，Monitor.cs/Network.cs 处理认证，Tunnels.cs 管理隧道，Organizer.cs/OrganizerTools.cs 管理收藏与日程。图标由 assets/workbench.svg 与 IconBuilder.cs 生成，覆盖 16–256 px，用于可执行文件、窗口和托盘。
 
 reference-vector.js 可读取自行获取的官方 Portal.js 生成无真实凭据的协议验证向量。Diagnostics.cs 是开发入口，不加入发行包。`build\TunnelTests.exe --live <配置路径>` 会建立真实测试隧道，仅在有授权且远端端口空闲时使用。
 
@@ -87,6 +87,18 @@ v1.2.0 已通过 78 项自动检查，并在 Windows 实测工作进程被终止
 部署后通过当前用户的按需任务 DesktopWorkbench.Launch 启动日用版，使常驻生命周期独立于开发终端。该任务没有定时或登录触发器，不提升权限、不保存密码、没有运行时长或电池供电限制。已有登录启动设置仍由应用管理；卸载时可移除此任务。
 
 数据目录固定为 Windows 当前用户的原生 %LOCALAPPDATA%\DesktopWorkbench，与程序目录无关。整个便携程序目录可以移动，开发版、日用版和其他位置的副本共享同一份账户、隧道和日志。普通启动通过当前用户的临时按需任务进入原生环境，避免打包终端的 AppData 重定向；启动确认后立即删除临时任务，不需要安装服务或管理员权限。任务计划程序不可用时明确停止启动，不回退到其他数据目录。已有登录启动快捷方式在移动程序后需重新设置。换 Windows 用户或电脑时使用该用户自己的 AppData，DPAPI 密码需重新输入。首次升级可从旧的用户目录 .desktop-workbench 复制缺失配置和日志；验证迁移后可删除旧目录。
+
+## 网址收藏
+
+在左侧选择收藏夹，点击“添加网址”保存名称和网址。可新建、改名、删除空收藏夹；编辑网址时可移动到其他收藏夹。单击列表中的网址名称或点击“打开网址”，会交给系统默认浏览器打开。仅支持 HTTP / HTTPS，可省略 https://，不支持执行本地文件或脚本地址。删除记录需确认。
+
+## 待办 / 日程
+
+点击“添加记录”，填写标题、备注和可选日期时间。不勾选日期即可作为普通待办；记录按日期时间排序，无日期项排在最后。支持编辑、标为完成、恢复未完成、删除，以及未完成 / 全部 / 已完成筛选。过期且未完成的安排以文字和颜色标示。
+
+日期时间按本机当地时间保存。本版用于记录，不发送到期提醒，也不做云端或日历同步。
+
+两项工具共用唯一原生 `%LOCALAPPDATA%\DesktopWorkbench\organizer.json`，开发、交付与日用版读取同一份数据；仅在保存时创建文件。保存采用原子替换并保留 `.bak`；主文件损坏或丢失时恢复有效备份，两份都无法读取时禁止编辑并保留原文件。修复后点击“重新加载”。这些记录按普通本地文本保存，保护数据需备份该数据目录；发布包不包含个人收藏或待办。
 
 ## 系统优化与托盘清理
 
